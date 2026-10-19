@@ -44,6 +44,10 @@ export default function Interview({
     const [failed, setFailed] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Состояния для модалки пропуска
+    const [showSkipModal, setShowSkipModal] = useState(false);
+    const [hoverSkip, setHoverSkip] = useState(false);
+
     // Таймеры
     const [totalSeconds, setTotalSeconds] = useState(0);
     const interviewStartTime = useRef<number>(Date.now());
@@ -63,18 +67,15 @@ export default function Interview({
     const [isCameraReady, setIsCameraReady] = useState(false);
     const chunksRef = useRef<Blob[]>([]);
 
-    // 1. Инициализация камеры
     useEffect(() => {
         const startCamera = async () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480 },
+                    video: true,
                     audio: true,
                 });
                 setMediaStream(stream);
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                }
+                if (videoRef.current) videoRef.current.srcObject = stream;
 
                 const recorder = new MediaRecorder(stream, {
                     mimeType: "video/webm",
@@ -86,52 +87,31 @@ export default function Interview({
                 setMediaRecorder(recorder);
                 setIsCameraReady(true);
             } catch (err) {
-                console.error("Ошибка доступа к камере:", err);
-                setCameraError(
-                    "Нет доступа к камере или микрофону. Разрешите доступ в браузере и обновите страницу.",
-                );
+                setCameraError("Нет доступа к камере или микрофону.");
             }
         };
-
         startCamera();
-
-        return () => {
-            if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
-        };
+        return () => mediaStream?.getTracks().forEach((t) => t.stop());
     }, []);
 
-    // Загрузка видео на бэкенд при завершении
     const uploadVideo = async () => {
         if (chunksRef.current.length === 0) return;
         const blob = new Blob(chunksRef.current, { type: "video/webm" });
         const formData = new FormData();
         formData.append("file", blob, "interview.webm");
-        try {
-            await fetch(
-                `http://localhost:8000/api/media/upload?interview_id=${payload.interviewId}`,
-                {
-                    method: "POST",
-                    body: formData,
-                },
-            );
-            console.log("Видео загружено");
-        } catch (e) {
-            console.error("Ошибка загрузки видео:", e);
-        }
+        await fetch(
+            `http://localhost:8000/api/media/upload?interview_id=${payload.interviewId}`,
+            { method: "POST", body: formData },
+        ).catch((e) => console.error(e));
     };
 
     useEffect(() => {
-        if (
-            (finished || failed) &&
-            mediaRecorder &&
-            mediaRecorder.state !== "inactive"
-        ) {
-            mediaRecorder.stop();
+        if ((finished || failed) && mediaRecorder?.state !== "inactive") {
+            mediaRecorder?.stop();
             setTimeout(uploadVideo, 500);
         }
     }, [finished, failed, mediaRecorder]);
 
-    // 2. Таймеры (общий и на ответ)
     useEffect(() => {
         if (finished || failed || !isCameraReady) return;
         const timer = window.setInterval(() => {
@@ -143,7 +123,8 @@ export default function Interview({
     }, [finished, failed, isCameraReady]);
 
     useEffect(() => {
-        if (finished || busy || failed || !isCameraReady) return;
+        if (finished || busy || failed || !isCameraReady || showSkipModal)
+            return;
         questionStartTime.current = Date.now();
         setAnswerSeconds(0);
         const timer = window.setInterval(() => {
@@ -152,9 +133,8 @@ export default function Interview({
             );
         }, 1000);
         return () => window.clearInterval(timer);
-    }, [msgs.length, finished, failed, isCameraReady]);
+    }, [msgs.length, finished, failed, isCameraReady, showSkipModal]);
 
-    // 3. Защита от выхода из вкладки
     const failInterview = async (reason: string) => {
         if (isFailingRef.current || finished || failed) return;
         isFailingRef.current = true;
@@ -175,52 +155,61 @@ export default function Interview({
         }
     };
 
+    // Защита от выхода
     useEffect(() => {
         if (finished || failed || !isCameraReady) return;
-        const handleBlur = () =>
-            failInterview("Выход из активного окна браузера.");
+
         const handleVisibilityChange = () => {
-            if (document.hidden)
+            if (document.hidden && !showSkipModal) {
                 failInterview("Переключение на другую вкладку.");
+            }
         };
-        window.addEventListener("blur", handleBlur);
+
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
-            window.removeEventListener("blur", handleBlur);
             document.removeEventListener(
                 "visibilitychange",
                 handleVisibilityChange,
             );
         };
-    }, [finished, failed, isCameraReady]);
+    }, [finished, failed, isCameraReady, showSkipModal]);
 
-    // 4. Блокировка копирования
+    // ГЛОБАЛЬНАЯ БЛОКИРОВКА КОПИРОВАНИЯ И ВСТАВКИ
     useEffect(() => {
-        const block = (e: Event) => e.preventDefault();
-        document.addEventListener("copy", block);
-        document.addEventListener("contextmenu", block);
+        const blockAction = (e: Event) => {
+            e.preventDefault();
+            // Небольшое уведомление, если нужно (можно убрать)
+            // alert("Копирование и вставка запрещены!");
+        };
+
+        document.addEventListener("copy", blockAction);
+        document.addEventListener("cut", blockAction);
+        document.addEventListener("paste", blockAction);
+        document.addEventListener("contextmenu", blockAction);
+
         return () => {
-            document.removeEventListener("copy", block);
-            document.removeEventListener("contextmenu", block);
+            document.removeEventListener("copy", blockAction);
+            document.removeEventListener("cut", blockAction);
+            document.removeEventListener("paste", blockAction);
+            document.removeEventListener("contextmenu", blockAction);
         };
     }, []);
 
-    const scrollDown = () => {
+    const scrollDown = () =>
         queueMicrotask(() =>
             scroller.current?.scrollTo({
                 top: scroller.current.scrollHeight,
                 behavior: "smooth",
             }),
         );
-    };
 
-    // 5. Отправка ответа
     const send = async (isSkip = false) => {
         const text = isSkip ? "___SKIP___" : answer.trim();
         if ((!text && !isSkip) || busy || finished || failed) return;
 
         setBusy(true);
         setError(null);
+        setShowSkipModal(false);
 
         if (!isSkip) {
             setMsgs((m) => [...m, { role: "user", text }]);
@@ -248,7 +237,6 @@ export default function Interview({
                         text: `❌ Интервью прервано: ${res.reject_reason}`,
                     },
                 ]);
-                scrollDown();
                 setTimeout(
                     () => onFinished(payload.interviewId, payload.level),
                     2000,
@@ -260,12 +248,8 @@ export default function Interview({
                 setFinished(true);
                 setMsgs((m) => [
                     ...m,
-                    {
-                        role: "ai",
-                        text: "Интервью завершено. Формируем отчёт…",
-                    },
+                    { role: "ai", text: "Интервью завершено." },
                 ]);
-                scrollDown();
                 setTimeout(
                     () => onFinished(payload.interviewId, payload.level),
                     1000,
@@ -274,22 +258,20 @@ export default function Interview({
             }
 
             if (res.question) {
-                // Формируем сообщение: если есть код, отделяем его
                 let newMsg: Msg = {
                     role: "ai",
                     text: res.question,
                     stageName: res.stage_name,
                 };
-                if (res.code_snippet) {
+                if (res.code_snippet)
                     newMsg.text =
                         res.question + "\n\n__CODE__" + res.code_snippet;
-                }
                 setMsgs((m) => [...m, newMsg]);
                 scrollDown();
             }
         } catch (e) {
             if (!isSkip) {
-                setMsgs((m) => m.slice(0, -1)); // откатываем сообщение при ошибке
+                setMsgs((m) => m.slice(0, -1));
                 setAnswer(text);
             }
             setError(e instanceof ApiError ? e.message : String(e));
@@ -303,6 +285,10 @@ export default function Interview({
             e.preventDefault();
             void send(false);
         }
+        // Блокируем Ctrl+V прямо в поле ввода
+        if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+            e.preventDefault();
+        }
     };
 
     const progress = Math.min(
@@ -313,74 +299,75 @@ export default function Interview({
     const totalS = String(totalSeconds % 60).padStart(2, "0");
     const timeLeft = Math.max(0, MAX_SECONDS_PER_ANSWER - answerSeconds);
 
-    // ЭКРАН 1: Загрузка камеры (пока нет доступа)
-    if (!isCameraReady && !cameraError) {
+    if (!isCameraReady && !cameraError)
         return (
-            <div className="max-w-3xl mx-auto px-4 py-10 flex flex-col items-center justify-center min-h-[60vh]">
-                <Loader2 className="animate-spin text-accent mb-4" size={32} />
-                <h2 className="text-[18px] font-bold">Подключение камеры...</h2>
-                <p className="text-muted text-[13px]">
-                    Пожалуйста, разрешите доступ к камере и микрофону.
-                </p>
+            <div className="text-center py-20">
+                <Loader2
+                    className="animate-spin mx-auto text-accent"
+                    size={32}
+                />
+                <p className="mt-4 text-muted">Подключение камеры...</p>
             </div>
         );
-    }
-
-    // ЭКРАН 2: Ошибка доступа к камере (блокируем интервью)
-    if (cameraError) {
+    if (cameraError)
         return (
-            <div className="max-w-2xl mx-auto px-4 py-10">
-                <div className="bg-card rounded-xl2 shadow-card p-8 text-center border border-red-200">
-                    <CameraOff
-                        size={48}
-                        className="text-red-600 mx-auto mb-4"
-                    />
-                    <h1 className="text-[22px] font-bold text-red-900 mb-2">
-                        Доступ к камере заблокирован
-                    </h1>
-                    <p className="text-[14px] text-muted mb-6">{cameraError}</p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="rounded-xl2 bg-accent text-white px-6 py-2 font-medium"
-                    >
-                        Попробовать снова
-                    </button>
-                </div>
+            <div className="text-center py-20 text-red-600">
+                <CameraOff size={48} className="mx-auto mb-4" />
+                <p>{cameraError}</p>
             </div>
         );
-    }
-
-    // ЭКРАН 3: Интервью провалено
-    if (failed) {
+    if (failed)
         return (
-            <div className="max-w-3xl mx-auto px-4 py-10">
-                <div className="bg-card rounded-xl2 shadow-card p-8 text-center space-y-4">
-                    <ShieldX size={48} className="text-red-600 mx-auto" />
-                    <h1 className="text-[24px] font-bold text-red-900">
-                        Интервью прервано
-                    </h1>
-                    <p className="text-[15px] text-muted">
-                        Тест завершён из-за нарушения правил (выход из окна).
-                    </p>
-                    <Loader2
-                        className="animate-spin text-muted mx-auto mt-4"
-                        size={24}
-                    />
-                </div>
+            <div className="text-center py-20">
+                <ShieldX size={48} className="text-red-600 mx-auto" />
+                <h1 className="text-xl font-bold mt-4">Интервью прервано</h1>
             </div>
         );
-    }
 
-    // ЭКРАН 4: Основное интервью
     return (
-        <div className="max-w-6xl mx-auto px-4 py-10 select-none">
+        <div className="max-w-6xl mx-auto px-4 py-10 select-none relative">
+            {showSkipModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-card rounded-xl2 shadow-xl p-6 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
+                        <AlertTriangle
+                            className="text-amber-500 mx-auto mb-3"
+                            size={32}
+                        />
+                        <h3 className="text-[18px] font-bold text-center mb-2">
+                            Пропустить вопрос?
+                        </h3>
+                        <p className="text-[13px] text-muted text-center mb-6">
+                            Это действие{" "}
+                            <span className="text-red-600 font-medium">
+                                сильно снизит
+                            </span>{" "}
+                            вашу итоговую оценку. ИИ зафиксирует отсутствие
+                            ответа.
+                        </p>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setShowSkipModal(false)}
+                                className="flex-1 rounded-xl2 border border-divider py-2 text-[14px] font-medium hover:bg-gray-50"
+                            >
+                                Отмена
+                            </button>
+                            <button
+                                onClick={() => send(true)}
+                                className="flex-1 rounded-xl2 bg-red-600 text-white py-2 text-[14px] font-medium hover:bg-red-700"
+                            >
+                                Да, пропустить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* ЛЕВАЯ ПАНЕЛЬ: КАМЕРА */}
                 <div className="lg:col-span-1">
                     <div className="bg-card rounded-xl2 shadow-card p-4 sticky top-10">
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-[14px] font-bold flex items-center gap-2">
-                                <Camera size={16} /> Ваша камера
+                                <Camera size={16} /> Камера
                             </h2>
                             <span className="text-[11px] font-bold text-red-600 flex items-center gap-1">
                                 <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />{" "}
@@ -396,16 +383,11 @@ export default function Interview({
                                 className="w-full h-full object-cover"
                             />
                         </div>
-                        <div className="mt-3 flex items-center gap-2 text-[12px] text-muted">
-                            <Mic size={14} /> Микрофон активен
-                        </div>
                     </div>
                 </div>
 
-                {/* ПРАВАЯ ПАНЕЛЬ: ЧАТ */}
                 <div className="lg:col-span-2">
                     <div className="bg-card rounded-xl2 shadow-card p-6 flex flex-col h-[80vh]">
-                        {/* Шапка */}
                         <div className="flex items-center justify-between gap-3 shrink-0">
                             <div>
                                 <h1 className="text-[20px] font-bold">
@@ -430,7 +412,6 @@ export default function Interview({
                             </div>
                         </div>
 
-                        {/* Прогресс */}
                         <div className="mt-3 shrink-0">
                             <div className="flex items-center justify-between text-[12px] text-muted mb-1">
                                 <span>
@@ -447,15 +428,6 @@ export default function Interview({
                             </div>
                         </div>
 
-                        {/* Предупреждение о времени */}
-                        {timeLeft < 30 && !finished && !busy && (
-                            <div className="mt-3 shrink-0 bg-red-50 text-red-700 text-[12px] px-3 py-2 rounded-lg flex items-center gap-2 animate-pulse">
-                                <AlertTriangle size={16} /> Осталось {timeLeft}{" "}
-                                сек.
-                            </div>
-                        )}
-
-                        {/* Лента сообщений */}
                         <div
                             ref={scroller}
                             className="mt-4 flex-1 overflow-y-auto space-y-3 pr-2"
@@ -465,7 +437,6 @@ export default function Interview({
                                 const [textPart, codePart] = hasCode
                                     ? m.text.split("__CODE__")
                                     : [m.text, ""];
-
                                 return (
                                     <div
                                         key={i}
@@ -479,7 +450,6 @@ export default function Interview({
                                                     {m.stageName}
                                                 </div>
                                             )}
-
                                             {hasCode ? (
                                                 <>
                                                     <div className="whitespace-pre-wrap mb-3">
@@ -509,29 +479,31 @@ export default function Interview({
                             )}
                         </div>
 
-                        {/* Ошибки */}
                         {error && (
                             <div className="mt-3 shrink-0 bg-red-50 text-red-700 text-[13px] px-3 py-2 rounded-lg flex items-center gap-2">
                                 <AlertTriangle size={16} /> {error}
                             </div>
                         )}
 
-                        {/* Поле ввода и кнопки */}
                         {!finished ? (
-                            <div className="mt-4 shrink-0 flex gap-3 items-stretch">
-                                <textarea
-                                    value={answer}
-                                    onChange={(e) => setAnswer(e.target.value)}
-                                    onKeyDown={onKeyDown}
-                                    placeholder="Ваш ответ… (Enter — отправить, Shift+Enter — перенос)"
-                                    rows={3}
-                                    className="flex-1 rounded-xl2 border border-divider px-3 py-2 outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 text-[14px] resize-none"
-                                />
-                                <div className="flex flex-col gap-2 justify-end">
+                            <div className="mt-4 shrink-0 flex flex-col gap-2">
+                                <div className="flex gap-3 items-stretch">
+                                    <textarea
+                                        value={answer}
+                                        onChange={(e) =>
+                                            setAnswer(e.target.value)
+                                        }
+                                        onKeyDown={onKeyDown}
+                                        // Блокируем вставку мышкой и через контекстное меню
+                                        onPaste={(e) => e.preventDefault()}
+                                        placeholder="Ваш ответ… (Enter — отправить, Shift+Enter — перенос)"
+                                        rows={2}
+                                        className="flex-1 rounded-xl2 border border-divider px-3 py-2 outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 text-[14px] resize-none"
+                                    />
                                     <button
                                         onClick={() => send(false)}
                                         disabled={busy || !answer.trim()}
-                                        className="rounded-xl2 bg-accent text-white px-4 h-10 font-medium disabled:opacity-40 flex items-center justify-center min-w-[60px]"
+                                        className="rounded-xl2 bg-accent text-white px-4 h-full font-medium disabled:opacity-40 flex items-center justify-center min-w-[60px]"
                                     >
                                         {busy ? (
                                             <RotateCcw
@@ -542,20 +514,26 @@ export default function Interview({
                                             <ArrowRight size={16} />
                                         )}
                                     </button>
+                                </div>
+
+                                <div className="relative flex justify-end">
+                                    {hoverSkip && (
+                                        <div className="absolute bottom-full mb-2 right-0 w-64 bg-gray-900 text-white text-[11px] px-3 py-2 rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-2">
+                                            Пропуск вопроса зафиксируется ИИ как
+                                            отсутствие ответа и сильно снизит
+                                            итоговый балл.
+                                            <div className="absolute top-full right-6 border-4 border-transparent border-t-gray-900" />
+                                        </div>
+                                    )}
                                     <button
-                                        onClick={() => {
-                                            if (
-                                                confirm(
-                                                    "Вы уверены, что хотите пропустить вопрос? Это сильно снизит вашу итоговую оценку.",
-                                                )
-                                            ) {
-                                                send(true);
-                                            }
-                                        }}
+                                        onMouseEnter={() => setHoverSkip(true)}
+                                        onMouseLeave={() => setHoverSkip(false)}
+                                        onClick={() => setShowSkipModal(true)}
                                         disabled={busy}
-                                        className="rounded-xl2 border border-divider text-muted h-10 px-4 font-medium hover:bg-gray-50 flex items-center justify-center gap-2 text-[13px]"
+                                        className="text-[12px] text-muted hover:text-amber-600 transition-colors flex items-center gap-1"
                                     >
-                                        <SkipForward size={14} /> Пропустить
+                                        <SkipForward size={12} /> Пропустить
+                                        вопрос
                                     </button>
                                 </div>
                             </div>

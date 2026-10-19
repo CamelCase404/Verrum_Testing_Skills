@@ -1,4 +1,15 @@
-import { CheckCircle2, XCircle, AlertTriangle, RotateCcw } from "lucide-react";
+import {
+    CheckCircle2,
+    XCircle,
+    AlertTriangle,
+    RotateCcw,
+    BarChart3,
+    Code2,
+    Brain,
+    MessageSquare,
+    Terminal,
+    Clock,
+} from "lucide-react";
 import type { Recommendation, ReportResponse } from "../types";
 
 const REC_LABEL: Record<Recommendation, string> = {
@@ -15,10 +26,33 @@ function RecIcon({ rec }: { rec: Recommendation }) {
     return <AlertTriangle className="text-amber-500" size={20} />;
 }
 
-function scoreColor(score: number): string {
-    if (score >= 3) return "bg-accentSoft text-accent";
-    if (score === 2) return "bg-amber-100 text-amber-800";
-    return "bg-red-50 text-red-700";
+function ScoreBadge({
+    score,
+    label,
+    icon: Icon,
+}: {
+    score?: number | null;
+    label: string;
+    icon: any;
+}) {
+    if (score === undefined || score === null) return null;
+    let color = "bg-red-50 text-red-700";
+    if (score >= 3) color = "bg-accentSoft text-accent";
+    else if (score === 2) color = "bg-amber-100 text-amber-800";
+
+    return (
+        <div className="flex flex-col items-center justify-center p-3 rounded-xl2 border border-divider bg-white shadow-sm">
+            <Icon size={20} className="text-muted mb-2" />
+            <span className="text-[12px] text-muted text-center mb-1 leading-tight">
+                {label}
+            </span>
+            <span
+                className={`text-[15px] font-bold px-3 py-0.5 rounded-full ${color}`}
+            >
+                {score} / 4
+            </span>
+        </div>
+    );
 }
 
 export default function Report({
@@ -28,166 +62,170 @@ export default function Report({
     report: ReportResponse;
     onRestart: () => void;
 }) {
+    const restartSameSettings = () => {
+        const stack = report.stack_id;
+        const langs = report.language_id.split(", ");
+        const level = report.level;
+        localStorage.setItem(
+            "verum.lastSettings",
+            JSON.stringify({ stack, langs, level }),
+        );
+        onRestart();
+    };
+
     return (
-        <div className="max-w-3xl mx-auto px-4 py-10">
-            <div className="bg-card rounded-xl2 shadow-card p-8 space-y-6">
-                <header>
-                    <h1 className="text-[24px] font-bold">Отчёт по интервью</h1>
-                    <p className="text-muted text-[13px] mt-1">
+        <div className="max-w-4xl mx-auto px-4 py-10 animate-in fade-in duration-500">
+            <div className="bg-card rounded-xl2 shadow-card p-8 space-y-8">
+                <header className="text-center border-b border-divider pb-6">
+                    <h1 className="text-[28px] font-bold">
+                        Результат интервью
+                    </h1>
+                    <p className="text-muted text-[14px] mt-1">
                         Уровень: {report.level} · Стек: {report.stack_id} ·
                         Язык: {report.language_id}
                     </p>
                 </header>
 
+                {!report.rejected && report.final_grade && (
+                    <div className="flex flex-col items-center justify-center py-6 bg-page rounded-xl2 border border-divider">
+                        <span className="text-[14px] text-muted uppercase tracking-widest mb-2">
+                            Ваш итоговый уровень
+                        </span>
+                        <span
+                            className={`text-[48px] font-black leading-none ${report.final_grade === "Reject" ? "text-red-600" : "text-accent"}`}
+                        >
+                            {report.final_grade}
+                        </span>
+                        {report.average_score && (
+                            <span className="text-[14px] text-muted mt-2">
+                                Средний балл: {report.average_score.toFixed(1)}{" "}
+                                / 4.0
+                            </span>
+                        )}
+                    </div>
+                )}
+
                 {report.rejected && (
-                    <div className="rounded-xl2 border border-red-200 bg-red-50 px-4 py-3 flex items-start gap-3">
-                        <XCircle className="text-red-600 mt-0.5" size={20} />
+                    <div className="rounded-xl2 border border-red-200 bg-red-50 px-6 py-4 flex items-start gap-4">
+                        <XCircle className="text-red-600 mt-0.5" size={24} />
                         <div>
-                            <div className="font-medium text-red-900">
+                            <div className="font-bold text-red-900 text-[16px]">
                                 Интервью прервано
                             </div>
-                            <div className="text-[13px] text-red-800">
+                            <div className="text-[14px] text-red-800 mt-1">
                                 {report.reject_reason}
                             </div>
                         </div>
                     </div>
                 )}
 
-                <div className="flex items-center gap-2 rounded-xl2 border border-divider px-4 py-3">
-                    <RecIcon rec={report.recommendation} />
-                    <span className="font-medium">
-                        {REC_LABEL[report.recommendation]}
-                    </span>
-                </div>
+                {!report.rejected && (
+                    <>
+                        <section>
+                            <h2 className="text-[16px] font-bold mb-4 flex items-center gap-2">
+                                <BarChart3 size={18} /> Профиль компетенций
+                            </h2>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <ScoreBadge
+                                    score={report.competency_architecture}
+                                    label="Архитектура"
+                                    icon={Brain}
+                                />
+                                <ScoreBadge
+                                    score={report.competency_code_review}
+                                    label="Code Review"
+                                    icon={Code2}
+                                />
+                                <ScoreBadge
+                                    score={report.competency_prompting}
+                                    label="Промптинг"
+                                    icon={MessageSquare}
+                                />
+                                <ScoreBadge
+                                    score={report.competency_ai_usage}
+                                    label="Работа с ИИ"
+                                    icon={Terminal}
+                                />
+                                <ScoreBadge
+                                    score={report.competency_soft_skills}
+                                    label="Soft Skills"
+                                    icon={CheckCircle2}
+                                />
 
-                <section>
-                    <h2 className="text-[13px] uppercase tracking-wide text-muted font-semibold">
-                        Резюме
-                    </h2>
-                    <p className="mt-2 text-[15px] leading-relaxed whitespace-pre-line">
-                        {report.summary}
-                    </p>
-                </section>
-
-                <section>
-                    <h2 className="text-[13px] uppercase tracking-wide text-muted font-semibold">
-                        Оценки по стадиям
-                    </h2>
-                    <ul className="mt-3 space-y-3">
-                        {report.stages.map((s) => (
-                            <li
-                                key={s.stage}
-                                className="rounded-xl2 border border-divider p-4"
-                            >
-                                <div className="flex items-center justify-between">
-                                    <span className="font-medium">
-                                        Стадия {s.stage}: {s.stage_name}
-                                    </span>
-                                    <span
-                                        className={`text-[13px] rounded-full px-3 py-1 font-semibold ${scoreColor(s.score)}`}
-                                    >
-                                        {s.score} / 4
-                                    </span>
-                                </div>
-                                {s.evidence.length > 0 && (
-                                    <div className="mt-2 text-[13px]">
-                                        <div className="text-muted">
-                                            Доказательства:
-                                        </div>
-                                        <ul className="list-disc pl-5">
-                                            {s.evidence.map((e, i) => (
-                                                <li key={i}>{e}</li>
-                                            ))}
-                                        </ul>
+                                {/* Время ответа */}
+                                {report.average_time_seconds != null && (
+                                    <div className="flex flex-col items-center justify-center p-3 rounded-xl2 border border-divider bg-white shadow-sm">
+                                        <Clock
+                                            size={20}
+                                            className="text-muted mb-2"
+                                        />
+                                        <span className="text-[12px] text-muted text-center mb-1 leading-tight">
+                                            Ср. время ответа
+                                        </span>
+                                        <span className="text-[15px] font-bold px-3 py-0.5 rounded-full bg-page text-ink">
+                                            {report.average_time_seconds} сек
+                                        </span>
+                                        {report.time_efficiency_score !=
+                                            null && (
+                                            <span className="text-[10px] text-muted mt-1">
+                                                Эффективность:{" "}
+                                                {report.time_efficiency_score}/4
+                                            </span>
+                                        )}
                                     </div>
                                 )}
-                                {s.gaps.length > 0 && (
-                                    <div className="mt-2 text-[13px]">
-                                        <div className="text-muted">
-                                            Пробелы:
-                                        </div>
-                                        <ul className="list-disc pl-5 text-red-700">
-                                            {s.gaps.map((e, i) => (
-                                                <li key={i}>{e}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
-                </section>
+                            </div>
+                        </section>
 
-                {(report.code_review_score != null ||
-                    report.prompt_skill_score != null) && (
-                    <section>
-                        <h2 className="text-[13px] uppercase tracking-wide text-muted font-semibold">
-                            Навыки Code Review и Prompting
-                        </h2>
-                        <div className="mt-3 grid md:grid-cols-2 gap-3">
-                            {report.code_review_score != null && (
-                                <div className="rounded-xl2 border border-divider p-4">
-                                    <div className="text-[13px] text-muted">
-                                        Понимание кода (Code Review)
-                                    </div>
-                                    <div
-                                        className={`mt-1 inline-block text-[13px] rounded-full px-3 py-1 font-semibold ${scoreColor(report.code_review_score)}`}
-                                    >
-                                        {report.code_review_score} / 4
-                                    </div>
-                                </div>
-                            )}
-                            {report.prompt_skill_score != null && (
-                                <div className="rounded-xl2 border border-divider p-4">
-                                    <div className="text-[13px] text-muted">
-                                        Качество промпта
-                                    </div>
-                                    <div
-                                        className={`mt-1 inline-block text-[13px] rounded-full px-3 py-1 font-semibold ${scoreColor(report.prompt_skill_score)}`}
-                                    >
-                                        {report.prompt_skill_score} / 4
-                                    </div>
-                                </div>
-                            )}
+                        <section>
+                            <h2 className="text-[16px] font-bold mb-3">
+                                Резюме
+                            </h2>
+                            <p className="text-[15px] leading-relaxed whitespace-pre-line text-ink/80">
+                                {report.summary}
+                            </p>
+                        </section>
+
+                        <div className="grid md:grid-cols-2 gap-6 pt-4">
+                            <div className="bg-page rounded-xl2 p-5">
+                                <h2 className="text-[14px] font-bold text-accent mb-3 flex items-center gap-2">
+                                    <CheckCircle2 size={16} /> Сильные стороны
+                                </h2>
+                                <ul className="list-disc pl-5 text-[14px] space-y-1">
+                                    {report.strengths.map((s, i) => (
+                                        <li key={i}>{s}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                            <div className="bg-page rounded-xl2 p-5">
+                                <h2 className="text-[14px] font-bold text-red-600 mb-3 flex items-center gap-2">
+                                    <AlertTriangle size={16} /> Зоны роста
+                                </h2>
+                                <ul className="list-disc pl-5 text-[14px] space-y-1">
+                                    {report.gaps.map((s, i) => (
+                                        <li key={i}>{s}</li>
+                                    ))}
+                                </ul>
+                            </div>
                         </div>
-                    </section>
+                    </>
                 )}
 
-                <section className="grid md:grid-cols-2 gap-4">
-                    <div>
-                        <h2 className="text-[13px] uppercase tracking-wide text-muted font-semibold">
-                            Сильные стороны
-                        </h2>
-                        <ul className="mt-2 list-disc pl-5 text-[14px]">
-                            {report.strengths.length === 0 ? (
-                                <li className="text-muted list-none">—</li>
-                            ) : (
-                                report.strengths.map((s, i) => (
-                                    <li key={i}>{s}</li>
-                                ))
-                            )}
-                        </ul>
-                    </div>
-                    <div>
-                        <h2 className="text-[13px] uppercase tracking-wide text-muted font-semibold">
-                            Зоны роста
-                        </h2>
-                        <ul className="mt-2 list-disc pl-5 text-[14px]">
-                            {report.gaps.length === 0 ? (
-                                <li className="text-muted list-none">—</li>
-                            ) : (
-                                report.gaps.map((s, i) => <li key={i}>{s}</li>)
-                            )}
-                        </ul>
-                    </div>
-                </section>
-
-                <button
-                    onClick={onRestart}
-                    className="inline-flex items-center gap-2 rounded-xl2 bg-accent text-white px-4 py-2 font-medium"
-                >
-                    <RotateCcw size={16} /> Пройти ещё раз
-                </button>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center pt-6 border-t border-divider">
+                    <button
+                        onClick={restartSameSettings}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl2 bg-accent text-white px-6 py-3 font-medium hover:brightness-110 transition"
+                    >
+                        <RotateCcw size={18} /> Пройти заново (с новыми
+                        вопросами)
+                    </button>
+                    <button
+                        onClick={onRestart}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl2 border border-divider px-6 py-3 font-medium hover:bg-gray-50 transition"
+                    >
+                        На главную
+                    </button>
+                </div>
             </div>
         </div>
     );

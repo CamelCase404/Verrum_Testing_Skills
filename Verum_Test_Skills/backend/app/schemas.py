@@ -26,12 +26,13 @@ class CatalogResponse(BaseModel):
 class StartInterviewRequest(BaseModel):
     level: Level
     stack_id: str
-    language_ids: list[str]  # Принимаем список языков
+    language_ids: list[str]
 
 
 class Turn(BaseModel):
     role: Literal["assistant", "user"]
     content: str
+    seconds_spent: int = 0
 
 
 class StartInterviewResponse(BaseModel):
@@ -76,7 +77,19 @@ class ReportResponse(BaseModel):
     strengths: list[str]
     gaps: list[str]
     recommendation: Literal["hire", "no_hire", "insufficient_evidence"]
-    code_review_score: Optional[int] = None
-    prompt_skill_score: Optional[int] = None
+
+    competency_architecture: Optional[int] = None
+    competency_code_review: Optional[int] = None
+    competency_prompting: Optional[int] = None
+    competency_ai_usage: Optional[int] = None
+    competency_soft_skills: Optional[int] = None
+
+    # Новые поля для времени
+    average_time_seconds: Optional[int] = None
+    time_efficiency_score: Optional[int] = None  # 0-4
+
+    final_grade: Optional[Literal["Junior", "Middle", "Senior", "Reject"]] = None
+    average_score: Optional[float] = None
+
     rejected: bool = False
     reject_reason: Optional[str] = None

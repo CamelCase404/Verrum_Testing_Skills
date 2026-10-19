@@ -53,6 +53,8 @@ export interface ReportResponse {
     prompt_skill_score?: number | null;
     rejected: boolean;
     reject_reason?: string | null;
+    average_time_seconds?: number | null;
+    time_efficiency_score?: number | null;
 }
 export interface SessionState {
     interviewId: string;
