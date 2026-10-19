@@ -1,0 +1,70 @@
+import {
+    Atom,
+    Box,
+    Boxes,
+    Brain,
+    Braces,
+    Cloud,
+    Code2,
+    Coffee,
+    Database,
+    FileCode2,
+    Flame,
+    Gamepad2,
+    Hash,
+    Hexagon,
+    Layers,
+    LayoutGrid,
+    Monitor,
+    Rabbit,
+    Server,
+    Ship,
+    Smartphone,
+    Sprout,
+    Table,
+    Terminal,
+    TreeDeciduous,
+    Waves,
+    Wrench,
+    Zap,
+    type LucideIcon,
+} from "lucide-react";
+
+export const ICONS: Record<string, LucideIcon> = {
+    Atom,
+    Box,
+    Boxes,
+    Brain,
+    Braces,
+    Cloud,
+    Code2,
+    Coffee,
+    Database,
+    FileCode2,
+    Flame,
+    Gamepad2,
+    Hash,
+    Hexagon,
+    Layers,
+    LayoutGrid,
+    Monitor,
+    Rabbit,
+    Server,
+    Ship,
+    Smartphone,
+    Sprout,
+    Table,
+    Terminal,
+    TreeDeciduous,
+    Waves,
+    Wrench,
+    Zap,
+};
+
+// Бэкенд отдаёт icon="Seedling" для Junior, но в lucide-react@0.454 её нет.
+// Алиасим на Sprout, чтобы иконка не проваливалась в Hexagon-фолбэк.
+ICONS["Seedling"] = Sprout;
+
+export function getIcon(name: string): LucideIcon {
+    return ICONS[name] ?? Hexagon;
+}
