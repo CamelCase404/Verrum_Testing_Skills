@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     AlertTriangle,
-    Play,
     RotateCcw,
     Loader2,
     Check,
@@ -22,7 +21,6 @@ import type { StartPayload } from "../App";
 interface Props {
     activeSession: SessionState | null;
     onStarted: (payload: StartPayload) => void;
-    onResume: (interviewId: string, level: LevelId) => void;
     onAbandon: () => void;
 }
 
@@ -35,7 +33,6 @@ const LEVEL_TO_API: Record<LevelId, LevelApi> = {
 export default function Landing({
     activeSession,
     onStarted,
-    onResume,
     onAbandon,
 }: Props) {
     const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
@@ -48,7 +45,6 @@ export default function Landing({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Восстанавливаем настройки, если пришли с "Пройти заново"
     useEffect(() => {
         const saved = localStorage.getItem("verum.lastSettings");
         if (saved) {
@@ -59,7 +55,6 @@ export default function Landing({
                 if (parsed.stack) setStackId(parsed.stack);
                 if (parsed.langs && Array.isArray(parsed.langs))
                     setLanguageIds(parsed.langs);
-                // Очищаем, чтобы не зацикливаться
                 localStorage.removeItem("verum.lastSettings");
             } catch (e) {}
         }
@@ -92,7 +87,7 @@ export default function Landing({
     const toggleLanguage = (id: string) => {
         if (languageIds.includes(id))
             setLanguageIds((ids) => ids.filter((x) => x !== id));
-        else if (languageIds.length < 3) setLanguageIds((ids) => [...ids, id]);
+        else if (languageIds.length < 4) setLanguageIds((ids) => [...ids, id]);
     };
 
     const start = async () => {
@@ -153,20 +148,10 @@ export default function Landing({
                                 Найдено незавершённое интервью
                             </div>
                             <div className="text-[12px] text-amber-800">
-                                ID {activeSession.interviewId}
+                                Вы не можете его продолжить, так как сессия была
+                                прервана. Начните заново.
                             </div>
                         </div>
-                        <button
-                            onClick={() =>
-                                onResume(
-                                    activeSession.interviewId,
-                                    activeSession.level,
-                                )
-                            }
-                            className="inline-flex items-center gap-1 rounded-lg bg-amber-600 text-white px-3 py-1.5 text-[13px] hover:bg-amber-700 transition"
-                        >
-                            <Play size={14} /> Продолжить
-                        </button>
                         <button
                             onClick={onAbandon}
                             className="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-[13px] text-amber-900 hover:bg-amber-100 transition"
@@ -181,7 +166,7 @@ export default function Landing({
                         Проверка знаний
                     </h1>
                     <p className="text-muted mt-2 text-[15px] text-center">
-                        Выберите уровень, стек и до 3 языков.
+                        Выберите уровень, стек и до 4 языков.
                     </p>
 
                     {catalogError && (
@@ -263,10 +248,10 @@ export default function Landing({
                         <section className="mt-10 animate-in fade-in slide-in-from-top-4 duration-500">
                             <div className="flex items-center justify-center gap-3">
                                 <h2 className="text-[13px] font-semibold tracking-wide uppercase text-muted">
-                                    Языки (макс. 3)
+                                    Языки (макс. 4)
                                 </h2>
                                 <span className="text-[12px] font-medium bg-page px-2 py-0.5 rounded text-muted">
-                                    {languageIds.length} / 3
+                                    {languageIds.length} / 4
                                 </span>
                             </div>
                             <div className="mt-4 flex flex-wrap justify-center gap-3">
@@ -283,9 +268,9 @@ export default function Landing({
                                             }
                                             disabled={
                                                 !active &&
-                                                languageIds.length >= 3
+                                                languageIds.length >= 4
                                             }
-                                            className={`flex items-center gap-2 rounded-xl2 border px-4 py-3 transition-all duration-300 ease-out ${active ? "border-accent bg-accentSoft shadow-md scale-[1.03]" : "border-divider bg-white hover:border-gray-300 hover:shadow-md"} ${!active && languageIds.length >= 3 ? "opacity-40 cursor-not-allowed" : ""}`}
+                                            className={`flex items-center gap-2 rounded-xl2 border px-4 py-3 transition-all duration-300 ease-out ${active ? "border-accent bg-accentSoft shadow-md scale-[1.03]" : "border-divider bg-white hover:border-gray-300 hover:shadow-md"} ${!active && languageIds.length >= 4 ? "opacity-40 cursor-not-allowed" : ""}`}
                                         >
                                             <span
                                                 className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${active ? "bg-white text-accent" : "bg-page text-ink"}`}

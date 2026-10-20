@@ -49,12 +49,15 @@ export interface ReportResponse {
     strengths: string[];
     gaps: string[];
     recommendation: Recommendation;
-    code_review_score?: number | null;
-    prompt_skill_score?: number | null;
+    competency_architecture?: number | null;
+    competency_code_understanding?: number | null;
+    competency_prompting?: number | null;
+    competency_adaptability?: number | null;
+    competency_soft_skills?: number | null;
+    total_score_100?: number | null;
+    final_grade?: "Junior" | "Middle" | "Senior" | "Reject" | null;
     rejected: boolean;
     reject_reason?: string | null;
-    average_time_seconds?: number | null;
-    time_efficiency_score?: number | null;
 }
 export interface SessionState {
     interviewId: string;

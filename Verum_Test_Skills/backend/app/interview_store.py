@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-from .schemas import Level, Turn
+from .schemas import Level
 
 DATABASE_URL = "sqlite:///./database.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -26,7 +26,10 @@ class DBInterview(Base):
     rejected = Column(Boolean, default=False)
     reject_reason = Column(String, nullable=True)
     turns = relationship(
-        "DBTurn", back_populates="interview", cascade="all, delete-orphan"
+        "DBTurn",
+        back_populates="interview",
+        cascade="all, delete-orphan",
+        order_by="DBTurn.id",
     )
 
 
@@ -36,7 +39,7 @@ class DBTurn(Base):
     interview_id = Column(String, ForeignKey("interviews.id"))
     role = Column(String)
     content = Column(Text)
-    seconds_spent = Column(Integer, default=0)  # Сохраняем время
+    seconds_spent = Column(Integer, default=0)
     interview = relationship("DBInterview", back_populates="turns")
 
 

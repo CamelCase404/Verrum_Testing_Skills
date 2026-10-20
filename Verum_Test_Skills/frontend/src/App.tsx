@@ -74,16 +74,12 @@ export default function App() {
         setView({ kind: "landing" });
     };
 
-    const handleResume = (interviewId: string, level: LevelId) =>
-        setView({ kind: "processing", interviewId, level });
-
     return (
         <main className="min-h-screen bg-page">
             {view.kind === "landing" && (
                 <Landing
                     activeSession={session}
                     onStarted={handleStarted}
-                    onResume={handleResume}
                     onAbandon={clear}
                 />
             )}

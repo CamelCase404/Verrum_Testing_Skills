@@ -62,6 +62,8 @@ STACKS = [
         icon="Monitor",
         description="Клиентская веб-разработка",
         languages=[
+            _opt("html", "HTML5", "FileCode2", "Разметка"),
+            _opt("css", "CSS3", "Layers", "Стили"),
             _opt("js", "JavaScript", "Braces", "Базовый язык веба"),
             _opt("ts", "TypeScript", "FileCode2", "Типизированный JS"),
             _opt("react", "React", "Atom", "Библиотека UI"),
@@ -115,7 +117,7 @@ STACKS = [
         id="data",
         name="Data / ML",
         icon="Brain",
-        description="Анализ данных и ML",
+        description="Анализ данных и машинное обучение",
         languages=[
             _opt("python", "Python", "FileCode2", "Основной язык"),
             _opt("pandas", "Pandas", "Table", "Табличные данные"),

@@ -62,7 +62,7 @@ class AnswerResponse(BaseModel):
 class StageScore(BaseModel):
     stage: int
     stage_name: str
-    score: int = Field(ge=0, le=4)
+    score: int = Field(ge=0, le=100)
     evidence: list[str]
     gaps: list[str]
 
@@ -79,17 +79,13 @@ class ReportResponse(BaseModel):
     recommendation: Literal["hire", "no_hire", "insufficient_evidence"]
 
     competency_architecture: Optional[int] = None
-    competency_code_review: Optional[int] = None
+    competency_code_understanding: Optional[int] = None
     competency_prompting: Optional[int] = None
-    competency_ai_usage: Optional[int] = None
+    competency_adaptability: Optional[int] = None
     competency_soft_skills: Optional[int] = None
 
-    # Новые поля для времени
-    average_time_seconds: Optional[int] = None
-    time_efficiency_score: Optional[int] = None  # 0-4
-
+    total_score_100: Optional[int] = None
     final_grade: Optional[Literal["Junior", "Middle", "Senior", "Reject"]] = None
-    average_score: Optional[float] = None
 
     rejected: bool = False
     reject_reason: Optional[str] = None

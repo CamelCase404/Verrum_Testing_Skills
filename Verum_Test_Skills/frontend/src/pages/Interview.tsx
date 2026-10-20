@@ -10,7 +10,6 @@ import {
     ShieldX,
     Camera,
     CameraOff,
-    Mic,
     SkipForward,
 } from "lucide-react";
 import { api, ApiError } from "../api";
@@ -25,6 +24,7 @@ interface Props {
 }
 
 const TOTAL_STAGES = 3;
+const QUESTIONS_PER_STAGE = 5;
 const MAX_SECONDS_PER_ANSWER = 180;
 
 export default function Interview({
@@ -38,17 +38,18 @@ export default function Interview({
     const [currentStageName, setCurrentStageName] = useState<string>(
         payload.stageName,
     );
+
+    const [answeredCount, setAnsweredCount] = useState(0);
+
     const [answer, setAnswer] = useState("");
     const [busy, setBusy] = useState(false);
     const [finished, setFinished] = useState(false);
     const [failed, setFailed] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Состояния для модалки пропуска
     const [showSkipModal, setShowSkipModal] = useState(false);
     const [hoverSkip, setHoverSkip] = useState(false);
 
-    // Таймеры
     const [totalSeconds, setTotalSeconds] = useState(0);
     const interviewStartTime = useRef<number>(Date.now());
     const [answerSeconds, setAnswerSeconds] = useState(0);
@@ -57,7 +58,6 @@ export default function Interview({
     const scroller = useRef<HTMLDivElement>(null);
     const isFailingRef = useRef(false);
 
-    // Камера
     const videoRef = useRef<HTMLVideoElement>(null);
     const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
     const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(
@@ -78,12 +78,12 @@ export default function Interview({
                 if (videoRef.current) videoRef.current.srcObject = stream;
 
                 const recorder = new MediaRecorder(stream, {
-                    mimeType: "video/webm",
+                    mimeType: "video/webm;codecs=vp8,opus",
                 });
                 recorder.ondataavailable = (e) => {
                     if (e.data.size > 0) chunksRef.current.push(e.data);
                 };
-                recorder.start(1000);
+                recorder.start();
                 setMediaRecorder(recorder);
                 setIsCameraReady(true);
             } catch (err) {
@@ -94,21 +94,25 @@ export default function Interview({
         return () => mediaStream?.getTracks().forEach((t) => t.stop());
     }, []);
 
-    const uploadVideo = async () => {
-        if (chunksRef.current.length === 0) return;
-        const blob = new Blob(chunksRef.current, { type: "video/webm" });
-        const formData = new FormData();
-        formData.append("file", blob, "interview.webm");
-        await fetch(
-            `http://localhost:8000/api/media/upload?interview_id=${payload.interviewId}`,
-            { method: "POST", body: formData },
-        ).catch((e) => console.error(e));
-    };
-
     useEffect(() => {
-        if ((finished || failed) && mediaRecorder?.state !== "inactive") {
-            mediaRecorder?.stop();
-            setTimeout(uploadVideo, 500);
+        if (
+            (finished || failed) &&
+            mediaRecorder &&
+            mediaRecorder.state !== "inactive"
+        ) {
+            mediaRecorder.stop();
+            setTimeout(() => {
+                if (chunksRef.current.length === 0) return;
+                const blob = new Blob(chunksRef.current, {
+                    type: "video/webm",
+                });
+                const formData = new FormData();
+                formData.append("file", blob, "interview.webm");
+                fetch(
+                    `http://localhost:8000/api/media/upload?interview_id=${payload.interviewId}`,
+                    { method: "POST", body: formData },
+                ).catch(console.error);
+            }, 1000);
         }
     }, [finished, failed, mediaRecorder]);
 
@@ -155,43 +159,27 @@ export default function Interview({
         }
     };
 
-    // Защита от выхода
     useEffect(() => {
         if (finished || failed || !isCameraReady) return;
-
         const handleVisibilityChange = () => {
-            if (document.hidden && !showSkipModal) {
+            if (document.hidden && !showSkipModal)
                 failInterview("Переключение на другую вкладку.");
-            }
         };
-
         document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => {
+        return () =>
             document.removeEventListener(
                 "visibilitychange",
                 handleVisibilityChange,
             );
-        };
     }, [finished, failed, isCameraReady, showSkipModal]);
 
-    // ГЛОБАЛЬНАЯ БЛОКИРОВКА КОПИРОВАНИЯ И ВСТАВКИ
     useEffect(() => {
-        const blockAction = (e: Event) => {
-            e.preventDefault();
-            // Небольшое уведомление, если нужно (можно убрать)
-            // alert("Копирование и вставка запрещены!");
-        };
-
-        document.addEventListener("copy", blockAction);
-        document.addEventListener("cut", blockAction);
-        document.addEventListener("paste", blockAction);
-        document.addEventListener("contextmenu", blockAction);
-
+        const block = (e: Event) => e.preventDefault();
+        document.addEventListener("copy", block);
+        document.addEventListener("contextmenu", block);
         return () => {
-            document.removeEventListener("copy", blockAction);
-            document.removeEventListener("cut", blockAction);
-            document.removeEventListener("paste", blockAction);
-            document.removeEventListener("contextmenu", blockAction);
+            document.removeEventListener("copy", block);
+            document.removeEventListener("contextmenu", block);
         };
     }, []);
 
@@ -222,11 +210,14 @@ export default function Interview({
         const spent = Math.floor(
             (Date.now() - questionStartTime.current) / 1000,
         );
+        const prevStage = currentStage;
 
         try {
             const res = await api.answer(payload.interviewId, text, spent);
             setCurrentStage(res.stage);
             setCurrentStageName(res.stage_name);
+
+            setAnsweredCount((c) => c + 1);
 
             if (res.rejected) {
                 setFinished(true);
@@ -266,7 +257,18 @@ export default function Interview({
                 if (res.code_snippet)
                     newMsg.text =
                         res.question + "\n\n__CODE__" + res.code_snippet;
-                setMsgs((m) => [...m, newMsg]);
+
+                // ОЧИСТКА ТОЛЬКО ПРИ ПЕРЕХОДЕ С 1-ГО НА 2-Й ЭТАП
+                if (res.stage === 1 && prevStage === 0) {
+                    const stageNotice: Msg = {
+                        role: "ai",
+                        text: `Переход на этап 2. Code Review`,
+                    };
+                    setMsgs([stageNotice, newMsg]);
+                    setAnsweredCount(0);
+                } else {
+                    setMsgs((m) => [...m, newMsg]);
+                }
                 scrollDown();
             }
         } catch (e) {
@@ -285,19 +287,21 @@ export default function Interview({
             e.preventDefault();
             void send(false);
         }
-        // Блокируем Ctrl+V прямо в поле ввода
-        if ((e.ctrlKey || e.metaKey) && e.key === "v") {
-            e.preventDefault();
-        }
+        if ((e.ctrlKey || e.metaKey) && e.key === "v") e.preventDefault();
     };
 
-    const progress = Math.min(
+    const totalQuestions = TOTAL_STAGES * QUESTIONS_PER_STAGE;
+    const globalProgress = Math.min(
         100,
-        Math.round(((currentStage + 1) / TOTAL_STAGES) * 100),
+        Math.round(
+            ((currentStage * QUESTIONS_PER_STAGE + answeredCount) /
+                totalQuestions) *
+                100,
+        ),
     );
+
     const totalM = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
     const totalS = String(totalSeconds % 60).padStart(2, "0");
-    const timeLeft = Math.max(0, MAX_SECONDS_PER_ANSWER - answerSeconds);
 
     if (!isCameraReady && !cameraError)
         return (
@@ -341,8 +345,7 @@ export default function Interview({
                             <span className="text-red-600 font-medium">
                                 сильно снизит
                             </span>{" "}
-                            вашу итоговую оценку. ИИ зафиксирует отсутствие
-                            ответа.
+                            вашу итоговую оценку.
                         </p>
                         <div className="flex gap-2">
                             <button
@@ -418,12 +421,12 @@ export default function Interview({
                                     Этап {currentStage + 1} из {TOTAL_STAGES} —{" "}
                                     {currentStageName}
                                 </span>
-                                <span>{progress}%</span>
+                                <span>{globalProgress}%</span>
                             </div>
                             <div className="h-1.5 rounded-full bg-page overflow-hidden">
                                 <div
                                     className="h-full bg-accent transition-all"
-                                    style={{ width: `${progress}%` }}
+                                    style={{ width: `${globalProgress}%` }}
                                 />
                             </div>
                         </div>
@@ -437,6 +440,7 @@ export default function Interview({
                                 const [textPart, codePart] = hasCode
                                     ? m.text.split("__CODE__")
                                     : [m.text, ""];
+
                                 return (
                                     <div
                                         key={i}
@@ -494,7 +498,6 @@ export default function Interview({
                                             setAnswer(e.target.value)
                                         }
                                         onKeyDown={onKeyDown}
-                                        // Блокируем вставку мышкой и через контекстное меню
                                         onPaste={(e) => e.preventDefault()}
                                         placeholder="Ваш ответ… (Enter — отправить, Shift+Enter — перенос)"
                                         rows={2}
