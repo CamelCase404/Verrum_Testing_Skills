@@ -76,7 +76,7 @@ def _generate_pure_question(
         if past_questions
         else "Нет"
     )
-    stage_desc = STAGE_DESCRIPTIONS[stage].format(langs=langs)
+    stage_desc = STAGE_DESCRIPTIONS[stage].format(langs=langs, level=level)
 
     sys_prompt = SYSTEM_INTERVIEWER.format(level=level, langs=langs)
 
@@ -106,12 +106,25 @@ def _evaluate_answer(
         return 0
     sys_prompt = SYSTEM_INTERVIEWER.format(level=level, langs=langs)
 
+    # Жесткое ограничение баллов на 2-м этапе в зависимости от уровня
+    max_score_instruction = ""
+    if stage == 1:
+        if level.lower() == "junior":
+            max_score_instruction = "Кандидат уровня Junior. Даже за идеальный ответ ставь максимум 60 баллов. Если он нашел не все баги — ставь 30-40."
+        elif level.lower() == "middle":
+            max_score_instruction = "Кандидат уровня Middle. Даже за идеальный ответ ставь максимум 80 баллов."
+        else:
+            max_score_instruction = (
+                "Кандидат уровня Senior. Можешь ставить до 100 баллов."
+            )
+
     prompt = (
-        f"Стадия: {stage}.\n"
+        f"Стадия: {stage}. Уровень кандидата: {level}.\n"
         f"Вопрос: {question}\n"
         f"Ответ кандидата: {answer}\n\n"
         f"Оцени ответ по шкале 0-100 (где 0 - бред, 100 - идеальный ответ). "
         f"Если ответ поверхностный — ставь 20-40. Если правильный — 70-100. "
+        f"{max_score_instruction} "
         f"Верни ТОЛЬКО число (целое от 0 до 100), без текста."
     )
 
@@ -119,15 +132,31 @@ def _evaluate_answer(
     match = re.search(r"\d+", raw)
     if match:
         score = int(match.group())
+        # Принудительное ограничение на бэкенде (чтобы ИИ не обманул)
+        if stage == 1:
+            if level.lower() == "junior" and score > 60:
+                score = 60
+            elif level.lower() == "middle" and score > 80:
+                score = 80
+
         return 0 if score <= 5 else max(0, min(100, score))
     return 40
 
 
 def _generate_code_review_task(level: str, stack: str, langs: str) -> tuple[str, str]:
     sys_prompt = SYSTEM_INTERVIEWER.format(level=level, langs=langs)
+
+    # ВСЕГДА генерируем сложный код, независимо от уровня.
+    # Это проверка "на вырост" — Junior может не найти баг, но мы посмотрим, как он старается.
+    difficulty = (
+        "Добавь СЛОЖНЫЕ ошибки, которые требуют опыта. "
+        "Используй: Race conditions (состояния гонки), SQL-инъекции, утечки памяти, проблемы с ACID-транзакциями, "
+        "логические баги в алгоритмах или блокировку Event Loop в асинхронном коде."
+    )
+
     prompt = (
         f"Сгенерируй СЛОЖНЫЙ код СТРОГО на одном из этих языков: {langs}.\n"
-        "Добавь проблемы с производительностью, безопасностью и архитектурой.\n"
+        f"{difficulty}\n"
         "КРИТИЧЕСКОЕ ПРАВИЛО: В коде НЕ ДОЛЖНО БЫТЬ КОММЕНТАРИЕВ, только чистый код с багами.\n"
         "Верни ответ СТРОГО в формате: сначала текст 'Найдите ошибки и уязвимости в этом коде и напишите промпт для ИИ, чтобы исправить их', затем символ '|', затем сам код."
     )
@@ -287,6 +316,7 @@ def answer(req: AnswerRequest) -> AnswerResponse:
     return AnswerResponse(stage=it.stage, stage_name=STAGE_NAMES[it.stage], question=q)
 
 
+# ... (Функции report, _parse_report_json, _normalize_report_data оставляем без изменений) ...
 class _Report(BaseModel):
     summary: str
     stages: list[StageScore]
