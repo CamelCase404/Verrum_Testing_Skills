@@ -1,0 +1,79 @@
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import HomePage from "./pages/HomePage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import DashboardPage from "./pages/DashboardPage";
+import { authApi } from "./api";
+
+export default function App() {
+    const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        if (token) {
+            authApi
+                .getMe()
+                .then((res) => setUser(res.data))
+                .catch(() => localStorage.removeItem("token"))
+                .finally(() => setLoading(false));
+        } else {
+            setLoading(false);
+        }
+    }, []);
+
+    if (loading)
+        return (
+            <div className="min-h-screen bg-page flex items-center justify-center text-ink">
+                Загрузка...
+            </div>
+        );
+
+    return (
+        <BrowserRouter>
+            <Routes>
+                {/* Главная страница доступна всем (или редиректит в дашборд, если залогинен) */}
+                <Route
+                    path="/"
+                    element={
+                        !user ? <HomePage /> : <Navigate to="/dashboard" />
+                    }
+                />
+
+                <Route
+                    path="/login"
+                    element={
+                        !user ? (
+                            <LoginPage onLogin={setUser} />
+                        ) : (
+                            <Navigate to="/dashboard" />
+                        )
+                    }
+                />
+                <Route
+                    path="/register"
+                    element={
+                        !user ? (
+                            <RegisterPage onLogin={setUser} />
+                        ) : (
+                            <Navigate to="/dashboard" />
+                        )
+                    }
+                />
+
+                {/* Дашборд только для авторизованных */}
+                <Route
+                    path="/dashboard"
+                    element={
+                        user ? (
+                            <DashboardPage user={user} />
+                        ) : (
+                            <Navigate to="/login" />
+                        )
+                    }
+                />
+            </Routes>
+        </BrowserRouter>
+    );
+}

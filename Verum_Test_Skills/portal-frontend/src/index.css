@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+    --color-page: #f5f5f3;
+    --color-ink: #1a1a1a;
+    --color-muted: #888888;
+    --color-accent: #155239;
+    --color-accent-soft: #e8f1ec;
+    --color-divider: #e5e5e5;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+body {
+    background-color: var(--color-page);
+    color: var(--color-ink);
+    font-family: "Inter", system-ui, sans-serif;
+}

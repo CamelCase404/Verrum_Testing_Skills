@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -89,3 +90,32 @@ class ReportResponse(BaseModel):
 
     rejected: bool = False
     reject_reason: Optional[str] = None
+
+class UserRole(str, Enum):
+    DEVELOPER = "developer"
+    COMPANY = "company"
+
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    role: UserRole
+    full_name: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class UserProfile(BaseModel):
+    id: int
+    email: str
+    role: UserRole
+    full_name: str
+    # Для разработчика
+    skills: list[dict] | None = None # сюда будем класть результаты ИИ-собеса
+    # Для компании
+    company_name: str | None = None
+    website: str | None = None
