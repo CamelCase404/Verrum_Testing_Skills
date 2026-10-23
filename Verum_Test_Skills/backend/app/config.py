@@ -2,7 +2,6 @@ import os
 
 from dotenv import load_dotenv
 
-# Ищем .env в корне проекта (на уровень выше app/)
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
@@ -16,9 +15,17 @@ class Settings:
     GIGACHAT_VERIFY_SSL: bool = (
         os.getenv("GIGACHAT_VERIFY_SSL", "false").lower() == "true"
     )
-    CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(
-        ","
-    )
+
+    # оба фронтенда: портал (3000) и интервью (5173)
+    CORS_ORIGINS: list[str] = [
+        o.strip()
+        for o in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:3000,http://localhost:5173,"
+            "http://127.0.0.1:3000,http://127.0.0.1:5173",
+        ).split(",")
+        if o.strip()
+    ]
 
 
 settings = Settings()

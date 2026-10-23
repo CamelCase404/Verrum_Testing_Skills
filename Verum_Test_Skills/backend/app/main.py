@@ -6,19 +6,15 @@ from .routers import auth, catalog, interview, media
 
 app = FastAPI(title="Verum API", version="0.1.0")
 
-# Настройка CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  # Разрешаем все методы (GET, POST, OPTIONS и т.д.)
-    allow_headers=["*"],  # Разрешаем все заголовки (включая Authorization)
-    expose_headers=[
-        "*"
-    ],  # Чтобы фронтенд мог читать кастомные заголовки, если появятся
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-# Подключение роутеров
 app.include_router(media.router)
 app.include_router(catalog.router)
 app.include_router(interview.router)

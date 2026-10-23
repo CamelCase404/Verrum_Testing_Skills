@@ -21,6 +21,11 @@ export class ApiError extends Error {
     }
 }
 
+function authHeaders(): Record<string, string> {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let res: Response;
     try {
@@ -29,6 +34,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
             headers: {
                 Accept: "application/json",
                 ...(init?.body ? { "Content-Type": "application/json" } : {}),
+                ...authHeaders(),
                 ...(init?.headers ?? {}),
             },
         });
@@ -53,7 +59,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
     catalog: () => request<CatalogResponse>("/api/catalog"),
 
-    // Теперь принимает массив language_ids
     startInterview: (
         level: LevelApi,
         stack_id: string,
@@ -74,4 +79,27 @@ export const api = {
         request<ReportResponse>(
             `/api/interview/${encodeURIComponent(interview_id)}/report`,
         ),
+
+    // НОВОЕ: сохраняем отчёт в skills_data пользователя
+    saveSkills: (report: ReportResponse) =>
+        request<{ status: string }>("/api/auth/skills", {
+            method: "POST",
+            body: JSON.stringify({
+                final_grade: report.final_grade ?? "Reject",
+                total_score_100: report.total_score_100 ?? 0,
+                stack_id: report.stack_id,
+                language_id: report.language_id,
+                summary: report.summary,
+                stages: report.stages,
+                strengths: report.strengths,
+                gaps: report.gaps,
+                recommendation: report.recommendation,
+                competency_architecture: report.competency_architecture,
+                competency_code_understanding:
+                    report.competency_code_understanding,
+                competency_prompting: report.competency_prompting,
+                competency_adaptability: report.competency_adaptability,
+                competency_soft_skills: report.competency_soft_skills,
+            }),
+        }),
 };

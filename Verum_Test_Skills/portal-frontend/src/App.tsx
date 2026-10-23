@@ -33,7 +33,6 @@ export default function App() {
     return (
         <BrowserRouter>
             <Routes>
-                {/* Главная страница доступна всем (или редиректит в дашборд, если залогинен) */}
                 <Route
                     path="/"
                     element={
@@ -62,12 +61,11 @@ export default function App() {
                     }
                 />
 
-                {/* Дашборд только для авторизованных */}
                 <Route
                     path="/dashboard"
                     element={
                         user ? (
-                            <DashboardPage user={user} />
+                            <DashboardPage user={user} onUserUpdate={setUser} />
                         ) : (
                             <Navigate to="/login" />
                         )

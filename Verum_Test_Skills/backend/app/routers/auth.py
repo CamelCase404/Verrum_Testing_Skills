@@ -53,10 +53,19 @@ def login(data: LoginReq, db=Depends(get_db)):
 
 @router.get("/me", response_model=UserProfile)
 def me(user: UserDB = Depends(get_current_user)):
-    return user
+    # явно прокидываем skills_data в поле skills (модель pydantic ждёт skills)
+    return UserProfile(
+        id=user.id,
+        email=user.email,
+        role=user.role,
+        full_name=user.full_name,
+        skills=user.skills_data,
+        company_name=user.company_name,
+        website=user.website,
+    )
 
 
-# --- ПОИСК КАНДИДАТОВ ---
+# --- Поиск кандидатов ---
 class SearchRequest(BaseModel):
     grade: Optional[str] = None
     stack: Optional[str] = None
@@ -116,7 +125,7 @@ def search_candidates(req: SearchRequest, db=Depends(get_db)):
     return results
 
 
-# --- ПРИЕМ ОТЧЕТА ОТ ИИ-СОБЕСЕДОВАНИЯ ---
+# --- Прием отчета от ИИ-собеседования ---
 class SkillsReport(BaseModel):
     final_grade: str
     total_score_100: int

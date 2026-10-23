@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShieldCheck, LogOut, Search, User, ArrowRight } from "lucide-react";
-import { api } from "../api";
+import { api, authApi } from "../api";
 
-export default function DashboardPage({ user }: { user: any }) {
+export default function DashboardPage({
+    user: initialUser,
+    onUserUpdate,
+}: {
+    user: any;
+    onUserUpdate?: (u: any) => void;
+}) {
     const navigate = useNavigate();
+    const [user, setUser] = useState<any>(initialUser);
     const [candidates, setCandidates] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -14,6 +21,20 @@ export default function DashboardPage({ user }: { user: any }) {
     const [stack, setStack] = useState("");
     const [language, setLanguage] = useState("");
 
+    // Подтягиваем свежий профиль (в т.ч. skills_data) при монтировании
+    useEffect(() => {
+        authApi
+            .getMe()
+            .then((res) => {
+                setUser(res.data);
+                if (onUserUpdate) onUserUpdate(res.data);
+            })
+            .catch(() => {
+                localStorage.removeItem("token");
+                navigate("/login");
+            });
+    }, [navigate, onUserUpdate]);
+
     const logout = () => {
         localStorage.removeItem("token");
         window.location.href = "/";
@@ -21,10 +42,8 @@ export default function DashboardPage({ user }: { user: any }) {
 
     const goToInterview = () => {
         const token = localStorage.getItem("token");
-        // Передаем токен во второй фронтенд
         window.location.href = `http://localhost:5173/?token=${token}`;
     };
-
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -42,9 +61,18 @@ export default function DashboardPage({ user }: { user: any }) {
         }
     };
 
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-[#F5F5F3] flex items-center justify-center">
+                Загрузка...
+            </div>
+        );
+    }
+
+    const isDeveloper = user.role === "developer";
+
     return (
         <div className="min-h-screen bg-[#F5F5F3] font-sans text-[#1A1A1A] flex flex-col">
-            {/* Хедер */}
             <header className="bg-white border-b border-[#E5E5E5] px-6 py-4 flex justify-between items-center sticky top-0 z-50">
                 <div
                     className="font-bold text-xl flex items-center gap-2 cursor-pointer text-[#155239]"
@@ -56,9 +84,7 @@ export default function DashboardPage({ user }: { user: any }) {
                     <span className="text-sm text-[#666]">
                         Вы: <b className="text-[#1A1A1A]">{user.full_name}</b>{" "}
                         <span className="text-xs bg-[#E8F1EC] text-[#155239] px-2 py-1 rounded-md ml-1">
-                            {user.role === "developer"
-                                ? "Разработчик"
-                                : "Компания"}
+                            {isDeveloper ? "Разработчик" : "Компания"}
                         </span>
                     </span>
                     <button
@@ -71,7 +97,7 @@ export default function DashboardPage({ user }: { user: any }) {
             </header>
 
             <main className="max-w-5xl mx-auto px-4 py-10 flex-grow w-full">
-                {user.role === "developer" ? (
+                {isDeveloper ? (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -87,6 +113,7 @@ export default function DashboardPage({ user }: { user: any }) {
                             </p>
                         </div>
 
+                        {/* Кнопка «Пройти тест» — всегда */}
                         <div className="bg-[#E8F1EC] border border-[#155239]/20 p-6 sm:p-8 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-6">
                             <div>
                                 <h2 className="text-xl font-bold text-[#155239]">
@@ -109,14 +136,14 @@ export default function DashboardPage({ user }: { user: any }) {
                             <h2 className="text-xl font-bold mb-4">
                                 Ваша статистика
                             </h2>
-                            {user.skills_data ? (
+                            {user.skills ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div className="bg-[#F5F5F3] p-6 rounded-xl border border-[#E5E5E5]">
                                         <p className="text-sm text-[#888] mb-1">
                                             Общий балл
                                         </p>
                                         <p className="text-3xl font-bold text-[#155239]">
-                                            {user.skills_data.total_score_100}{" "}
+                                            {user.skills.total_score_100}{" "}
                                             <span className="text-lg text-[#888] font-normal">
                                                 / 100
                                             </span>
@@ -127,7 +154,7 @@ export default function DashboardPage({ user }: { user: any }) {
                                             Подтвержденный уровень
                                         </p>
                                         <p className="text-3xl font-bold text-[#155239]">
-                                            {user.skills_data.final_grade}
+                                            {user.skills.final_grade}
                                         </p>
                                     </div>
                                 </div>

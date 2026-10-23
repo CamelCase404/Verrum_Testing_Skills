@@ -91,9 +91,11 @@ class ReportResponse(BaseModel):
     rejected: bool = False
     reject_reason: Optional[str] = None
 
+
 class UserRole(str, Enum):
     DEVELOPER = "developer"
     COMPANY = "company"
+
 
 class UserRegister(BaseModel):
     email: str
@@ -101,21 +103,22 @@ class UserRegister(BaseModel):
     role: UserRole
     full_name: str
 
+
 class UserLogin(BaseModel):
     email: str
     password: str
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str
+
 
 class UserProfile(BaseModel):
     id: int
     email: str
     role: UserRole
     full_name: str
-    # Для разработчика
-    skills: list[dict] | None = None # сюда будем класть результаты ИИ-собеса
-    # Для компании
+    skills: dict | None = None  # ← было list[dict], а skills_data — это dict
     company_name: str | None = None
     website: str | None = None
