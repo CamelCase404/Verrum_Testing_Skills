@@ -85,11 +85,13 @@ def _generate_pure_question(
     )
 
     if stage == 2 and prev_code_context:
+        # ДОБАВЛЕНЫ ЯЗЫКИ И СТЕК ДЛЯ 3-ГО ЭТАПА
         prompt += (
             f"Код с предыдущего этапа:\n{prev_code_context[:1000]}...\n\n"
             f"Кандидат написал такой промпт для его исправления:\n'{prev_answer}'\n\n"
-            "Придумай реалистичную ситуацию (например, вирусный контент, наплыв пользователей, поломка на сервере или другая ситуация, которая ставит в рамки разработчика). "
-            "Проблема должна быть связана с кодом выше. Задай вопрос: как кандидат будет выкручиваться из этой ситуации? "
+            f"Придумай реалистичную проблему, связанную с его стеком и языками ({langs}), которая поставит его в жесткие рамки. "
+            "Например: поломка сервера, вирусный контент, отказ базы данных. "
+            "Задай вопрос: как кандидат будет выкручиваться из этой ситуации? "
             "Верни ТОЛЬКО текст вопроса."
         )
     else:
@@ -106,11 +108,11 @@ def _evaluate_answer(
         return 0
     sys_prompt = SYSTEM_INTERVIEWER.format(level=level, langs=langs)
 
-    # Жесткое ограничение баллов на 2-м этапе в зависимости от уровня
+    # Ограничение максимального балла на 2-м этапе в зависимости от уровня
     max_score_instruction = ""
     if stage == 1:
         if level.lower() == "junior":
-            max_score_instruction = "Кандидат уровня Junior. Даже за идеальный ответ ставь максимум 60 баллов. Если он нашел не все баги — ставь 30-40."
+            max_score_instruction = "Кандидат уровня Junior. Даже за идеальный ответ ставь максимум 60 баллов."
         elif level.lower() == "middle":
             max_score_instruction = "Кандидат уровня Middle. Даже за идеальный ответ ставь максимум 80 баллов."
         else:
@@ -119,10 +121,10 @@ def _evaluate_answer(
             )
 
     prompt = (
-        f"Стадия: {stage}. Уровень кандидата: {level}.\n"
+        f"Стадия: {stage}. Уровень: {level}.\n"
         f"Вопрос: {question}\n"
         f"Ответ кандидата: {answer}\n\n"
-        f"Оцени ответ по шкале 0-100 (где 0 - бред, 100 - идеальный ответ). "
+        f"Оцени ответ по шкале 0-100. "
         f"Если ответ поверхностный — ставь 20-40. Если правильный — 70-100. "
         f"{max_score_instruction} "
         f"Верни ТОЛЬКО число (целое от 0 до 100), без текста."
@@ -132,7 +134,7 @@ def _evaluate_answer(
     match = re.search(r"\d+", raw)
     if match:
         score = int(match.group())
-        # Принудительное ограничение на бэкенде (чтобы ИИ не обманул)
+        # Принудительное ограничение на бэкенде
         if stage == 1:
             if level.lower() == "junior" and score > 60:
                 score = 60
@@ -146,18 +148,18 @@ def _evaluate_answer(
 def _generate_code_review_task(level: str, stack: str, langs: str) -> tuple[str, str]:
     sys_prompt = SYSTEM_INTERVIEWER.format(level=level, langs=langs)
 
-    # ВСЕГДА генерируем сложный код, независимо от уровня.
-    # Это проверка "на вырост" — Junior может не найти баг, но мы посмотрим, как он старается.
-    difficulty = (
-        "Добавь СЛОЖНЫЕ ошибки, которые требуют опыта. "
-        "Используй: Race conditions (состояния гонки), SQL-инъекции, утечки памяти, проблемы с ACID-транзакциями, "
-        "логические баги в алгоритмах или блокировку Event Loop в асинхронном коде."
-    )
+    # Сложность кода зависит от уровня
+    if level.lower() == "junior":
+        difficulty = "Добавь простые ошибки (отсутствие проверки на null, неэффективный цикл, простая SQL-инъекция). Код должен быть понятным."
+    elif level.lower() == "middle":
+        difficulty = "Добавь ошибки среднего уровня (N+1 запрос, неправильная обработка исключений, проблемы с многопоточностью, отсутствие индексов)."
+    else:
+        difficulty = "Добавь СЛОЖНЫЕ ошибки уровня Senior (race conditions, утечки памяти, проблемы с ACID-транзакциями, блокировка Event Loop)."
 
     prompt = (
-        f"Сгенерируй СЛОЖНЫЙ код СТРОГО на одном из этих языков: {langs}.\n"
+        f"Сгенерируй код СТРОГО на одном из этих языков: {langs}.\n"
         f"{difficulty}\n"
-        "КРИТИЧЕСКОЕ ПРАВИЛО: В коде НЕ ДОЛЖНО БЫТЬ КОММЕНТАРИЕВ, только чистый код с багами.\n"
+        "КРИТИЧЕСКОЕ ПРАВИЛО: В коде НЕ ДОЛЖНО БЫТЬ КОММЕНТАРИЕВ, только чистый код с багами а также он должен быть на русском языке.\n"
         "Верни ответ СТРОГО в формате: сначала текст 'Найдите ошибки и уязвимости в этом коде и напишите промпт для ИИ, чтобы исправить их', затем символ '|', затем сам код."
     )
     raw = ask_text(sys_prompt, prompt).strip()
@@ -316,7 +318,6 @@ def answer(req: AnswerRequest) -> AnswerResponse:
     return AnswerResponse(stage=it.stage, stage_name=STAGE_NAMES[it.stage], question=q)
 
 
-# ... (Функции report, _parse_report_json, _normalize_report_data оставляем без изменений) ...
 class _Report(BaseModel):
     summary: str
     stages: list[StageScore]
@@ -490,13 +491,12 @@ def report(interview_id: str) -> ReportResponse:
         normalized = _normalize_report_data(_parse_report_json(raw))
         parsed = _Report.model_validate(normalized)
 
-        # ЖЕСТКАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ ГРЕЙДА
         total = parsed.total_score_100 or 0
+        initial_level = it.level.lower()
 
-        # Если ИИ насчитал меньше 30, но мы знаем, что он ответил, ставим минимум 30
+        # ЖЕСТКАЯ ЛОГИКА: ИИ определяет базовый грейд
         if total < 30:
             grade = "Reject"
-            total = 0  # Обнуляем, если реально провал
         elif total <= 55:
             grade = "Junior"
         elif total <= 80:
@@ -504,7 +504,13 @@ def report(interview_id: str) -> ReportResponse:
         else:
             grade = "Senior"
 
-        # Игнорируем final_grade от ИИ, используем наш вычисленный grade
+        # ОГРАНИЧЕНИЕ СВЕРХУ: Нельзя прыгнуть выше выбранного уровня
+        if initial_level == "junior" and grade in ("Middle", "Senior"):
+            grade = "Junior"
+        elif initial_level == "middle" and grade == "Senior":
+            grade = "Middle"
+
+        # Игнорируем final_grade от ИИ, используем наш вычисленный и ограниченный grade
         return ReportResponse(
             interview_id=it.id,
             level=it.level,
@@ -525,7 +531,7 @@ def report(interview_id: str) -> ReportResponse:
             competency_adaptability=parsed.competency_adaptability,
             competency_soft_skills=parsed.competency_soft_skills,
             total_score_100=total,
-            final_grade=grade,  # Используем вычисленный
+            final_grade=grade,
             rejected=False,
             reject_reason=None,
         )
